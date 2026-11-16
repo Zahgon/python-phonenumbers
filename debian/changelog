@@ -1,3 +1,9 @@
+golang-github-daviddrysdale-python-phonenumbers (9.0.43-1) UNRELEASED; urgency=medium
+
+  * Port the library and packaging to Go.
+
+ -- Torge Szczepanek <debian@cygnusnetworks.de>  Mon, 16 Nov 2026 22:31:44 +0530
+
 python-phonenumbers (7.0.4) UNRELEASED; urgency=low
 
   * Update to upstream version 7.0.4

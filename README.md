@@ -1,235 +1,208 @@
-phonenumbers Python Library
-===========================
+# phonenumbers Go library
 
 [![Coverage Status](https://coveralls.io/repos/daviddrysdale/python-phonenumbers/badge.svg?branch=dev&service=github)](https://coveralls.io/github/daviddrysdale/python-phonenumbers?branch=dev)
 
-This is a Python port of [Google's libphonenumber library](https://github.com/google/libphonenumber)
-It supports Python 2.5-2.7 and Python 3.x (in the same codebase, with no
-[2to3](http://docs.python.org/2/library/2to3.html) conversion needed).
+This module is a Go port of [Google's libphonenumber library](https://github.com/google/libphonenumber). It parses, formats, validates, and finds international phone numbers, and includes geocoder, carrier, and time-zone lookups.
 
-Original Java code is Copyright (C) 2009-2015 The Libphonenumber Authors.
+The original Java code is Copyright (C) 2009-2015 The Libphonenumber Authors. See [HISTORY.md](HISTORY.md) for release history.
 
-Release [HISTORY](https://github.com/daviddrysdale/python-phonenumbers/blob/dev/python/HISTORY.md),
-derived from [upstream release notes](https://github.com/google/libphonenumber/blob/master/release_notes.txt).
+## Installation
 
-[Documentation](https://daviddrysdale.github.io/python-phonenumbers/)
+The module requires Go 1.23 or later.
 
-Installation
-------------
-
-Install using [pip](https://pypi.org/project/phonenumbers/) with:
-```
-pip install phonenumbers
+```console
+go get github.com/daviddrysdale/python-phonenumbers/phonenumbers
 ```
 
-Example Usage
--------------
+Import the core package as follows:
 
-The main object that the library deals with is a `PhoneNumber` object.  You can create this from a string
-representing a phone number using the `parse` function, but you also need to specify the country
-that the phone number is being dialled from (unless the number is in E.164 format, which is globally
-unique).
-
-```pycon
->>> import phonenumbers
->>> x = phonenumbers.parse("+442083661177", None)
->>> print(x)
-Country Code: 44 National Number: 2083661177 Leading Zero: False
->>> type(x)
-<class 'phonenumbers.phonenumber.PhoneNumber'>
->>> y = phonenumbers.parse("020 8366 1177", "GB")
->>> print(y)
-Country Code: 44 National Number: 2083661177 Leading Zero: False
->>> x == y
-True
->>> z = phonenumbers.parse("00 1 650 253 2222", "GB")  # as dialled from GB, not a GB number
->>> print(z)
-Country Code: 1 National Number: 6502532222 Leading Zero(s): False
+```go
+import "github.com/daviddrysdale/python-phonenumbers/phonenumbers"
 ```
 
-The `PhoneNumber` object that `parse` produces typically still needs to be validated, to check whether
-it's a *possible* number (e.g. it has the right number of digits) or a *valid* number (e.g. it's
-in an assigned exchange).
+## Parsing, validation, and formatting
 
-```pycon
->>> z = phonenumbers.parse("+120012301", None)
->>> print(z)
-Country Code: 1 National Number: 20012301 Leading Zero: False
->>> phonenumbers.is_possible_number(z)  # too few digits for USA
-False
->>> phonenumbers.is_valid_number(z)
-False
->>> z = phonenumbers.parse("+12001230101", None)
->>> print(z)
-Country Code: 1 National Number: 2001230101 Leading Zero: False
->>> phonenumbers.is_possible_number(z)
-True
->>> phonenumbers.is_valid_number(z)  # NPA 200 not used
-False
+`Parse` accepts a region pointer because a globally unique E.164 number does not need a default region. It returns a `PhoneNumber` and an error.
+
+```go
+gb := "GB"
+x, err := phonenumbers.Parse("+442083661177", nil)
+if err != nil {
+	log.Fatal(err)
+}
+y, err := phonenumbers.Parse("020 8366 1177", &gb)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(x)
+fmt.Println(x.Equal(y))
+
+z, err := phonenumbers.Parse("00 1 650 253 2222", &gb)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(z)
 ```
 
-The `parse` function will also fail completely (with a `NumberParseException`) on inputs that cannot
-be uniquely parsed, or that  can't possibly be phone numbers.
+A possible number has a plausible number of digits; a valid number also matches an assigned numbering range.
 
-```pycon
->>> z = phonenumbers.parse("02081234567", None)  # no region, no + => unparseable
-Traceback (most recent call last):
-  File "phonenumbers/phonenumberutil.py", line 2350, in parse
-    "Missing or invalid default region.")
-phonenumbers.phonenumberutil.NumberParseException: (0) Missing or invalid default region.
->>> z = phonenumbers.parse("gibberish", None)
-Traceback (most recent call last):
-  File "phonenumbers/phonenumberutil.py", line 2344, in parse
-    "The string supplied did not seem to be a phone number.")
-phonenumbers.phonenumberutil.NumberParseException: (1) The string supplied did not seem to be a phone number.
+```go
+number, err := phonenumbers.Parse("+120012301", nil)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(phonenumbers.IsPossibleNumber(number)) // false
+fmt.Println(phonenumbers.IsValidNumber(number))    // false
+
+number, err = phonenumbers.Parse("+12001230101", nil)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(phonenumbers.IsPossibleNumber(number)) // true
+fmt.Println(phonenumbers.IsValidNumber(number))    // false: NPA 200 is unused
 ```
 
-Once you've got a phone number, a common task is to format it in a standardized format.  There are a few
-formats available (under `PhoneNumberFormat`), and the `format_number` function does the formatting.
+Inputs that cannot be parsed return a `*phonenumbers.NumberParseException` as an error.
 
-```pycon
->>> phonenumbers.format_number(x, phonenumbers.PhoneNumberFormat.NATIONAL)
-'020 8366 1177'
->>> phonenumbers.format_number(x, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
-'+44 20 8366 1177'
->>> phonenumbers.format_number(x, phonenumbers.PhoneNumberFormat.E164)
-'+442083661177'
+```go
+_, err := phonenumbers.Parse("02081234567", nil)
+fmt.Println(err) // (0) Missing or invalid default region.
+
+_, err = phonenumbers.Parse("gibberish", nil)
+fmt.Println(err) // (1) The string supplied did not seem to be a phone number.
 ```
 
-If your application has a UI that allows the user to type in a phone number, it's nice to get the formatting
-applied as the user types.   The `AsYouTypeFormatter` object allows this.
+The formatting constants correspond to the standard national, international, E.164, and RFC 3966 forms.
 
-```pycon
->>> formatter = phonenumbers.AsYouTypeFormatter("US")
->>> formatter.input_digit("6")
-'6'
->>> formatter.input_digit("5")
-'65'
->>> formatter.input_digit("0")
-'650'
->>> formatter.input_digit("2")
-'650 2'
->>> formatter.input_digit("5")
-'650 25'
->>> formatter.input_digit("3")
-'650 253'
->>> formatter.input_digit("2")
-'650-2532'
->>> formatter.input_digit("2")
-'(650) 253-22'
->>> formatter.input_digit("2")
-'(650) 253-222'
->>> formatter.input_digit("2")
-'(650) 253-2222'
+```go
+national, err := phonenumbers.FormatNumber(x, phonenumbers.PhoneNumberFormatNATIONAL)
+if err != nil {
+	log.Fatal(err)
+}
+international, err := phonenumbers.FormatNumber(x, phonenumbers.PhoneNumberFormatINTERNATIONAL)
+if err != nil {
+	log.Fatal(err)
+}
+e164, err := phonenumbers.FormatNumber(x, phonenumbers.PhoneNumberFormatE164)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(national)      // 020 8366 1177
+fmt.Println(international) // +44 20 8366 1177
+fmt.Println(e164)          // +442083661177
 ```
 
-Sometimes, you've got a larger block of text that may or may not have some phone numbers inside it.  For this,
-the `PhoneNumberMatcher` object provides the relevant functionality; you can iterate over it to retrieve a
-sequence of `PhoneNumberMatch` objects.  Each of these match objects holds a `PhoneNumber` object together
-with information about where the match occurred in the original string.
+## Formatting as the user types
 
-```pycon
->>> text = "Call me at 510-748-8230 if it's before 9:30, or on 703-4800500 after 10am."
->>> for match in phonenumbers.PhoneNumberMatcher(text, "US"):
-...     print(match)
-...
-PhoneNumberMatch [11,23) 510-748-8230
-PhoneNumberMatch [51,62) 703-4800500
->>> for match in phonenumbers.PhoneNumberMatcher(text, "US"):
-...     print(phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.E164))
-...
-+15107488230
-+17034800500
+`AsYouTypeFormatter` returns the best formatting after each digit and reports
+metadata or replacement-pattern errors.
+
+```go
+formatter := phonenumbers.NewAsYouTypeFormatter("US")
+for _, digit := range []string{"6", "5", "0", "2", "5", "3", "2", "2", "2", "2"} {
+	formatted, err := formatter.InputDigit(digit)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(formatted)
+}
+// Final result: (650) 253-2222
 ```
 
-You might want to get some information about the location that corresponds to a phone number.  The
-`geocoder.description_for_number` does this, when possible.
+## Finding numbers in text
 
-```pycon
->>> from phonenumbers import geocoder
->>> ch_number = phonenumbers.parse("0431234567", "CH")
->>> geocoder.description_for_number(ch_number, "de")
-'Zürich'
->>> geocoder.description_for_number(ch_number, "en")
-'Zurich'
->>> geocoder.description_for_number(ch_number, "fr")
-'Zurich'
->>> geocoder.description_for_number(ch_number, "it")
-'Zurigo'
+`PhoneNumberMatcher` reports code-point offsets and the parsed number for each match. `Iter` consumes the remaining matches.
+
+```go
+text := "Call me at 510-748-8230 if it's before 9:30, or on 703-4800500 after 10am."
+us := "US"
+matcher, err := phonenumbers.NewPhoneNumberMatcher(&text, &us, phonenumbers.LeniencyVALID, 10, 2)
+if err != nil {
+	log.Fatal(err)
+}
+matches, err := matcher.Iter()
+if err != nil {
+	log.Fatal(err)
+}
+for _, match := range matches {
+	fmt.Println(match)
+	formatted, err := phonenumbers.FormatNumber(match.Number(), phonenumbers.PhoneNumberFormatE164)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(formatted)
+}
 ```
 
-For mobile numbers in some countries, you can also find out information about which carrier
-originally owned a phone number.
+The two matches are `510-748-8230` and `703-4800500`, formatted as `+15107488230` and `+17034800500`.
 
-```pycon
->>> from phonenumbers import carrier
->>> ro_number = phonenumbers.parse("+40721234567", "RO")
->>> carrier.name_for_number(ro_number, "en")
-'Vodafone'
+## Geocoder, carrier, and time zones
+
+The optional lookup APIs are separate Go packages.
+
+```go
+import "github.com/daviddrysdale/python-phonenumbers/phonenumbers/geocoder"
+
+ch := "CH"
+chNumber, err := phonenumbers.Parse("0431234567", &ch)
+if err != nil {
+	log.Fatal(err)
+}
+description, err := geocoder.DescriptionForNumber(chNumber, "de", nil, nil)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(description) // Zürich
 ```
 
-You might also be able to retrieve a list of time zone names that the number potentially
-belongs to.
+```go
+import "github.com/daviddrysdale/python-phonenumbers/phonenumbers/carrier"
 
-```pycon
->>> from phonenumbers import timezone
->>> gb_number = phonenumbers.parse("+447986123456", "GB")
->>> timezone.time_zones_for_number(gb_number)
-('Atlantic/Reykjavik', 'Europe/London')
+roNumber, err := phonenumbers.Parse("+40721234567", nil)
+if err != nil {
+	log.Fatal(err)
+}
+name, err := carrier.NameForNumber(roNumber, "en", nil, nil)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(name) // Vodafone
 ```
 
-For more information about the other functionality available from the library, look in the unit tests or in the original
-[libphonenumber project](https://github.com/google/libphonenumber).
+```go
+import phonenumbertz "github.com/daviddrysdale/python-phonenumbers/phonenumbers/timezone"
 
-Memory Usage
-------------
+gbNumber, err := phonenumbers.Parse("+447986123456", nil)
+if err != nil {
+	log.Fatal(err)
+}
+zones, err := phonenumbertz.TimeZonesForNumber(gbNumber)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(zones) // [Europe/Guernsey Europe/Isle_of_Man Europe/Jersey Europe/London]
+```
 
-The library includes a lot of metadata, potentially giving a significant memory overhead.  There are two mechanisms
-for dealing with this.
+## Metadata
 
-* The normal metadata (just over 2 MiB of generated Python code) for the core functionality of the library is loaded
-  on-demand, on a region-by-region basis (i.e. the metadata for a region is only loaded on the first time it is needed).
-* Metadata for extended functionality is held in separate packages, which therefore need to be explicitly
-  loaded separately.  This affects:
-    * The geocoding metadata (~19 MiB), which is held in `phonenumbers.geocoder` and used by the geocoding functions
-      (`geocoder.description_for_number`, `geocoder.description_for_valid_number` or
-      `geocoder.country_name_for_number`).
-    * The carrier metadata (~1 MiB), which is held in `phonenumbers.carrier` and used by the mapping functions
-      (`carrier.name_for_number` or `carrier.name_for_valid_number`).
-    * The timezone metadata (~100 KiB), which is held in `phonenumbers.timezone` and used by the timezone functions
-      (`time_zones_for_number` or `time_zones_for_geographical_number`).
+The source metadata under `resources/` comes from libphonenumber. `resources/embed.go` embeds the XML, geocoding, carrier, and time-zone files into the module. The library builds its metadata lazily at run time, so applications do not need generated data packages or external files.
 
-The `phonenumberslite` version of the library does not include the geocoder, carrier and timezone packages,
-which can be useful if you have problems installing the main `phonenumbers` library due to space/memory limitations.
+Advanced users and tests can switch to another resources-shaped tree with `phonenumbers.UseData(fsys, lax)`. It builds metadata immediately, returns any build error, and changes the active data only on success. `phonenumbers.DataError` reports the active data's build error, `phonenumbers.DataFS` returns its filesystem, and `phonenumbers.DataGeneration` changes whenever active data is replaced so lookup packages can refresh their caches.
 
-If you need to ensure that the metadata memory use is accounted for at start of day (i.e. that a subsequent on-demand
-load of metadata will not cause a pause or memory exhaustion):
+## Development
 
-* Force-load the normal metadata by calling `phonenumbers.PhoneMetadata.load_all()`.
-* Force-load the extended metadata by `import`ing the appropriate packages (`phonenumbers.geocoder`,
-  `phonenumbers.carrier`, `phonenumbers.timezone`).
+Run the complete checks from the repository root:
 
-If you check many numbers from many regions, `phonenumbers.enable_pattern_cache()` keeps every compiled metadata
-pattern, so they are not recompiled once `re`'s own cache is full.
+```console
+make fmt
+make vet
+make test
+```
 
-Static Typing
--------------
+`make cover` writes `coverage.out` and prints per-function coverage. `make locale` regenerates the locale display-name map using the installed JDK. Package documentation is available through `go doc`; see [docs/README.md](docs/README.md).
 
-The library includes a set of type [stub files](https://www.python.org/dev/peps/pep-0484/#stub-files) to support static
-type checking by library users. These stub files signal the types that should be used, and may also be of use in IDEs 
-which have integrated type checking functionalities.
+The API and metadata track [libphonenumber](https://github.com/google/libphonenumber). Changes to numbering metadata or the upstream API should normally be submitted there first.
 
-These files are written for Python 3, and as such type checking the library with these stubs on Python 2.5-2.7 is
-unsupported.
+## Licence
 
-Project Layout
---------------
-
-* The `python/` directory holds the Python code.
-* The `resources/` directory is a copy of the `resources/`
-  directory from
-  [libphonenumber](https://github.com/google/libphonenumber/tree/master/resources).
-  This is not needed to run the Python code, but is needed when upstream
-  changes to the master metadata need to be incorporated.
-* The `tools/` directory holds the tools that are used to process upstream
-  changes to the master metadata.
+This project is distributed under the Apache License 2.0. See [LICENSE](LICENSE).
